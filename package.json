@@ -1,0 +1,48 @@
+{
+  "name": "fits-ts",
+  "version": "0.0.1",
+  "description": "TypeScript library for handling .fits files.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "nyc mocha --require ts-node/register test/**/*.test.ts",
+    "prepublishOnly": "npm run test && npm run build"
+  },
+  "keywords": [
+    "fits",
+    "typescript",
+    "astronomy",
+    "binary"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Janizai/fits-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Janizai/fits-ts/issues"
+  },
+  "homepage": "https://github.com/Janizai/fits-ts#readme",
+  "author": "Jani Haapala",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "pako": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.1",
+    "@types/chai-as-promised": "^8.0.2",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.13.14",
+    "@types/pako": "^2.0.3",
+    "chai": "^5.2.0",
+    "chai-as-promised": "^8.0.1",
+    "mocha": "^11.1.0",
+    "nyc": "^17.1.0",
+    "ts-node": "^10.9.2"
+  }
+}
