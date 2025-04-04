@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { describe, it } from 'mocha';
-import { HeaderParser } from '../../src/parser/HeaderParser';
+import { HeaderParser } from '../../src/io/HeaderIO';
 import { FitsFileReader } from '../../src/io/FileReader';
 
 /**
@@ -30,15 +30,13 @@ describe('HeaderParser', () => {
         const block = new Uint8Array(blockSize);
         block.set(headerBytes, 0);
 
-        // Convert to Blob
-        const blob = new Blob([block]);
-        const fileReader = new FitsFileReader(blob);
+        const fileReader = new FitsFileReader(block);
         const parser = new HeaderParser(fileReader);
 
         const { header, headerSize } = await parser.parseHeader(0);
-        expect(header['SIMPLE']).to.equal('T');
-        expect(header['NAXIS']).to.equal('2');
-        // We expect headerSize to be exactly 2880 in this scenario (one block).
+        expect(header.get('SIMPLE')).to.deep.equal(true);
+        expect(header.get('NAXIS')).to.deep.equal(2);
+
         expect(headerSize).to.equal(blockSize);
     });
 
@@ -48,20 +46,19 @@ describe('HeaderParser', () => {
         const block1 = new Uint8Array(blockSize); // no 'END' here
         const block2 = new Uint8Array(blockSize);
 
-        const lines = [
-            'NAXIS   =                    2',
-            'END'
-        ];
-        const paddedLines = lines.map(line => line.padEnd(80, ' ')).join('');
-        block2.set(new TextEncoder().encode(paddedLines), 0);
+        const headerBytes = buildMinimalHeader();
+        block2.set(headerBytes, 0);
 
-        const blob = new Blob([block1, block2]);
-        const fileReader = new FitsFileReader(blob);
+        const merged = new Uint8Array(blockSize * 2);
+        merged.set(block1, 0);
+        merged.set(block2, blockSize);
+
+        const fileReader = new FitsFileReader(merged);
         const parser = new HeaderParser(fileReader);
 
         const { header, headerSize } = await parser.parseHeader(0);
-        expect(header['NAXIS']).to.equal('2');
-        // We expect headerSize to be blockSize * 2 = 5760
+        expect(header.get('NAXIS')).to.deep.equal(2);
+
         expect(headerSize).to.equal(blockSize * 2);
     });
 });

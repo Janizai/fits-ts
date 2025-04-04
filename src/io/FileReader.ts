@@ -1,22 +1,48 @@
 import pako from 'pako';
 
-export class FitsFileReader {
-    constructor(private readonly file: Blob) {}
+export type FitsFileSource = Buffer | ArrayBuffer | Uint8Array;
 
-    public static fromBuffer(fileBuffer: Buffer): Blob {
-        const isGzipped = fileBuffer[0] === 0x1f && fileBuffer[1] === 0x8b;
-        if (isGzipped) {
-            return new Blob([pako.ungzip(fileBuffer)]);
-        }
-        return new Blob([fileBuffer]);
+export class FitsFileReader {
+    private readonly data: Uint8Array;
+
+    constructor(source: FitsFileSource) {
+        this.data = FitsFileReader.normalize(source);
     }
 
-    public async readBytes(start: number, length: number): Promise<ArrayBuffer> {
-        const slice = this.file.slice(start, start + length);
-        return await slice.arrayBuffer();
+    private static normalize(source: FitsFileSource): Uint8Array {
+        const uint8 =
+            source instanceof Buffer
+                ? new Uint8Array(source.buffer, source.byteOffset, source.byteLength)
+                : source instanceof ArrayBuffer
+                ? new Uint8Array(source)
+                : source;
+
+        const isGzipped = uint8[0] === 0x1f && uint8[1] === 0x8b;
+        return isGzipped ? pako.ungzip(uint8) : uint8;
+    }
+
+    public async readBytes(start: number, length: number): Promise<Uint8Array> {
+        return this.data.slice(start, start + length);
+    }
+
+    public async *streamBytes(start: number, total: number, chunkSize = 2880): AsyncIterableIterator<Uint8Array> {
+        let offset = start;
+        while (offset < start + total) {
+            const end = Math.min(offset + chunkSize, start + total);
+            yield this.data.slice(offset, end);
+            offset = end;
+        }
+    }
+
+    public async readAll(): Promise<Uint8Array> {
+        return this.data;
     }
 
     public get size(): number {
-        return this.file.size;
+        return this.data.length;
+    }
+
+    public getData(): Uint8Array {
+        return this.data;
     }
 }

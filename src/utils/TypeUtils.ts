@@ -16,13 +16,10 @@ export function getTypeSize(type: string): number {
     return size;
 }
 
-export function parseFieldData(data: ArrayBuffer, type: string, count: number): any {
-    const view = new DataView(data);
+export function parseFieldData(data: Uint8Array, type: string, count: number): any {
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     const parsers: { [key: string]: (offset: number) => any } = {
-        'L': (offset: number) => {
-            const byte = new Uint8Array(data, offset, 1)[0];
-            return byte === 84; // ASCII 'T' equals true
-        },
+        'L': (offset: number) => data[offset] === 84,
         'B': (offset: number) => view.getUint8(offset),
         'I': (offset: number) => view.getInt16(offset, false),
         'J': (offset: number) => view.getInt32(offset, false),
@@ -41,7 +38,7 @@ export function parseFieldData(data: ArrayBuffer, type: string, count: number): 
     }
 
     // For ASCII type, return the string directly
-    if (type === 'A') {
+    if (type === 'A' || count === 1) {
         return parser(0);
     }
 
@@ -51,4 +48,34 @@ export function parseFieldData(data: ArrayBuffer, type: string, count: number): 
         result.push(parser(i * elementSize));
     }
     return result;
+}
+
+export function writeFieldData(value: any, type: string, count: number): ArrayBuffer {
+    const size = count * getTypeSize(type);
+    const buffer = new ArrayBuffer(size);
+    const view = new DataView(buffer);
+
+    const values = Array.isArray(value) ? value : [value];
+
+    for (let i = 0; i < count; i++) {
+        const v = values[i] ?? 0;
+
+        switch (type) {
+            case 'L': view.setUint8(i, v ? 84 : 70); break; // 'T' or 'F'
+            case 'I': view.setInt16(i * 2, v, false); break;
+            case 'J': view.setInt32(i * 4, v, false); break;
+            case 'E': view.setFloat32(i * 4, v, false); break;
+            case 'D': view.setFloat64(i * 8, v, false); break;
+            case 'U': view.setUint8(i, v); break;
+            case 'A': {
+                const textEncoder = new TextEncoder();
+                const encoded = textEncoder.encode(v.toString().padEnd(count, '\0').slice(0, count));
+                new Uint8Array(buffer, i * count, encoded.length).set(encoded);
+                break;
+            }
+            default: throw new Error(`Unsupported column type: ${type}`);
+        }
+    }
+
+    return buffer;
 }
