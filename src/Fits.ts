@@ -129,8 +129,11 @@ export class Fits {
 
     public async *entries(): AsyncIterableIterator<{ index: number; header: FitsHeader; data: FitsData }> {
         for (let i = 0; i < this.hdus.length; i++) {
-            const header = this.hdus[i].header;
-            const data = this.hdus[i].data || await this.getData(i);
+            const hdu = this.hdus[i];
+
+            const header = hdu.header;
+            const data = hdu.data ?? await this.getData(i);
+
             yield { index: i, header, data };
         }
     }
@@ -146,8 +149,10 @@ export class Fits {
     public async toBytes(): Promise<Uint8Array> {
         const writer = new FitsWriter();
         for (let i = 0; i < this.hdus.length; i++) {
-            const header = this.hdus[i].header;
-            const data = this.hdus[i].data || await this.getData(i);
+            const hdu = this.hdus[i];
+
+            const header = hdu.header;
+            const data = hdu.data || await this.getData(i);
 
             writer.addHDU(header, data);
         }

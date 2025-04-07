@@ -1,6 +1,6 @@
 import { FitsHeader } from './core/FitsHeader';
 
-type HDUType = 'image' | 'table';
+export type HDUType = 'image' | 'table' | 'header';
 
 export interface FitsHDU {
     headerOffset?: number;

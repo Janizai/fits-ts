@@ -1,7 +1,7 @@
 import { FitsHeader } from '../core/FitsHeader';
-import { FitsHDU, FitsData } from '../interfaces';
 import { ImageParser, ImageWriter } from './ImageIO';
 import { HeaderParser, HeaderWriter } from './HeaderIO';
+import { FitsHDU, FitsData, HDUType } from '../interfaces';
 import { FitsFileSource, FitsFileReader } from './FileReader';
 import { TableParser, TableWriter, deriveColumnFormats } from './TableIO';
 
@@ -51,7 +51,24 @@ export class FitsReader {
 
                 const alignedDataOffset = Math.ceil(position / blockSize) * blockSize;
 
-                const type = header.has('TFIELDS') ? 'table' : 'image';
+                let type: HDUType;
+                if (header.has('TFIELDS')) {
+                    type = 'table';
+                } else if (header.has('XTENSION')) {
+                    const xtension = header.getString('XTENSION')?.replace(/(^')|('$)/g, '').trim().toUpperCase();
+                    type = xtension === 'IMAGE' ? 'image' : 'header';
+                } else {
+                    type = 'header';
+                }
+                let test: string;
+                if (header.has('XTENSION')) {
+                    test = header.getString('XTENSION')?.trim() ?? '';
+                } else if (header.has('SIMPLE')) {
+                    test = header.getString('SIMPLE')?.trim() ?? '';
+                } else {
+                    test = 'unknown';
+                }
+                console.log(header, type, test);
                 const hdu: FitsHDU = {
                     shape,
                     header,
@@ -111,6 +128,11 @@ export class FitsReader {
         switch (hdu.type) {
             case 'table': return this.tableParser.readTable(hdu);
             case 'image': return this.imageParser.readImage(hdu);
+            case 'header': {
+                if (hdu.header.has('NAXIS1') && hdu.header.has('NAXIS2')) {
+                    return this.imageParser.readImage(hdu);
+                }
+                return Promise.resolve({ shape: [], keys: [], type: 'header', data: [] });}
             default: throw new Error(`Unsupported HDU type: ${hdu.type}`);
         }
     }

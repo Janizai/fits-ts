@@ -1,6 +1,6 @@
 {
   "name": "fits-ts",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "description": "TypeScript library for handling .fits files.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
