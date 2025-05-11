@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2025-05-11
+
+### Added
+- `lastIndexWithData` in `Fits` for tracking which HDU’s data is currently cached 
+- `ensureHeadersParsed` in `FitsReader` to prevent redundant header parsing  
+- `makePadding` utility for consistent block padding in `FitsWriter`  
+
+### Changed
+- Use nullish coalescing (`??=`) when initializing `loadPromise` in `Fits`  
+- Unified `FitsData` into three explicit interfaces: `ImageData`, `TableData`, and `HeaderData`  
+- `FitsHeader.get` / `.getNumber` / `.getString` / `.getComment` now return `null` instead of throwing on missing keys  
+- Refactored `addHDU`, `getData`, async iterators (`entries`), and serialization (`toBytes`) to handle optional data cleanly  
+- Overhauled header/data parsing in `FitsIO`, simplified offset math, removed vestigial error blocks  
+- Enhanced `ImageIO` and `TableIO` to operate on TypedArrays and fully support all FITS `BITPIX` values  
+- Improved `formatHeaderLine` to align numeric vs string values within 20-char fields and pad comments correctly  
+- Updated `stats` util to accept `Iterable<number>`, filter out non-finite values, and compute robust statistics
+
+### Fixed
+- Brought all tests in line with new APIs: switched to TypedArrays in fixtures, updated expected error messages, and renamed spec files
+
+
 ## [0.1.1] - 2025-04-07
 ### Fixed
 - Detecting correct data type based on header keywords and values
