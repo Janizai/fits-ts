@@ -28,68 +28,57 @@ export class FitsReader {
     }
 
     public async parseHeaders(): Promise<void> {
+        if (this.hduMetadata.length > 0) {
+            return;
+        }
+
         let position = 0;
         const fileSize = this.fileReader.size;
         const blockSize = this.headerParser.blockSize;
 
         while (position < fileSize) {
-            try {
-                const headerOffset = position;
-                const { header, headerSize } = await this.headerParser.parseHeader(position);
+            const headerOffset = position;
+            const { header, headerSize } = await this.headerParser.parseHeader(position);
 
-                position += headerSize;
+            position += headerSize;
 
-                const naxis = header.get('NAXIS') ?? 0;
-                const shape: number[] = [];
-                for (let i = 1; i <= naxis; i++) {
-                    shape.push(header.getNumber(`NAXIS${i}`) ?? 0);
-                }
-
-                const bitpix = header.get('BITPIX') ?? 0;
-                const bytesPerElement = Math.abs(bitpix) / 8;
-                const dataSize = naxis > 0 ? shape.reduce((a, b) => a * b, 1) * bytesPerElement : 0;
-
-                const alignedDataOffset = Math.ceil(position / blockSize) * blockSize;
-
-                let type: HDUType;
-                if (header.has('TFIELDS')) {
-                    type = 'table';
-                } else if (header.has('XTENSION')) {
-                    const xtension = header.getString('XTENSION')?.replace(/(^')|('$)/g, '').trim().toUpperCase();
-                    type = xtension === 'IMAGE' ? 'image' : 'header';
-                } else {
-                    type = 'header';
-                }
-                let test: string;
-                if (header.has('XTENSION')) {
-                    test = header.getString('XTENSION')?.trim() ?? '';
-                } else if (header.has('SIMPLE')) {
-                    test = header.getString('SIMPLE')?.trim() ?? '';
-                } else {
-                    test = 'unknown';
-                }
-                console.log(header, type, test);
-                const hdu: FitsHDU = {
-                    shape,
-                    header,
-                    dataOffset: alignedDataOffset,
-                    headerOffset,
-                    type
-                };
-                this.hduMetadata.push(hdu);
-
-                position = alignedDataOffset + Math.ceil(dataSize / blockSize) * blockSize;
-
-            } catch (error) {
-                break;
+            const naxis = header.get('NAXIS') ?? 0;
+            const shape: number[] = [];
+            for (let i = 1; i <= naxis; i++) {
+                shape.push(header.getNumber(`NAXIS${i}`) ?? 0);
             }
+
+            const bitpix = header.get('BITPIX') ?? 0;
+            const bytesPerElement = Math.abs(bitpix) / 8;
+            const dataSize = naxis > 0 ? shape.reduce((a, b) => a * b, 1) * bytesPerElement : 0;
+
+            const alignedDataOffset = Math.ceil(position / blockSize) * blockSize;
+
+            let type: HDUType;
+            if (header.has('TFIELDS')) {
+                type = 'table';
+            } else if (header.has('XTENSION')) {
+                const xtension = header.getString('XTENSION')?.replace(/(^')|('$)/g, '').trim().toUpperCase();
+                type = xtension === 'IMAGE' ? 'image' : 'header';
+            } else {
+                type = 'header';
+            }
+
+            const hdu: FitsHDU = {
+                shape,
+                header,
+                dataOffset: alignedDataOffset,
+                headerOffset,
+                type
+            };
+            this.hduMetadata.push(hdu);
+
+            position = alignedDataOffset + Math.ceil(dataSize / blockSize) * blockSize;
         }
     }
 
     public async ensureHeadersParsed(): Promise<void> {
-        if (!this.headerParsingPromise) {
-            this.headerParsingPromise = this.parseHeaders();
-        }
+        this.headerParsingPromise ??= this.parseHeaders();
         return this.headerParsingPromise;
     }
 
@@ -132,7 +121,7 @@ export class FitsReader {
                 if (hdu.header.has('NAXIS1') && hdu.header.has('NAXIS2')) {
                     return this.imageParser.readImage(hdu);
                 }
-                return Promise.resolve({ shape: [], keys: [], type: 'header', data: [] });}
+                return Promise.resolve({ shape: [], keys: [], type: 'header', data: null });}
             default: throw new Error(`Unsupported HDU type: ${hdu.type}`);
         }
     }
@@ -147,10 +136,16 @@ export class FitsReader {
     }
 }
 
-export class FitsWriter {
-    private readonly hdus: { header: FitsHeader; data: FitsData }[] = [];
+function makePadding(numBytes: number): Uint8Array {
+    const pad = new Uint8Array(numBytes);
+    pad.fill(32); // fill with ASCII space
+    return pad;
+}
 
-    public addHDU(header: FitsHeader, data: FitsData): void {
+export class FitsWriter {
+    private readonly hdus: { header: FitsHeader; data: FitsData | undefined }[] = [];
+
+    public addHDU(header: FitsHeader, data: FitsData | undefined): void {
         this.hdus.push({ header, data });
     }
 
@@ -168,52 +163,52 @@ export class FitsWriter {
             // Align data offset
             const paddingToData = align(position, headerWriter.blockSize) - position;
             if (paddingToData > 0) {
-                chunks.push(new Uint8Array(paddingToData));
+                const padBlock = makePadding(paddingToData);
+                chunks.push(padBlock);
                 position += paddingToData;
             }
 
+            // If no data, skip ahead
+            if (!data) {
+                continue;
+            }
+
             // Write data
-            let dataBlock: Uint8Array;
+            let dataBlock: Uint8Array | null = null;
             if (data.type === 'image') {
                 dataBlock = new ImageWriter().toBinary(
                     data,
-                    header.get('BITPIX'),
-                    header.has('BSCALE') ? header.get('BSCALE') : 1,
-                    header.has('BZERO') ? header.get('BZERO') : 0
+                    header.get('BITPIX')!,
+                    header.get('BSCALE') ?? 1,
+                    header.get('BZERO') ?? 0
                 );
-            } else {
+            } else if (header.has('TFIELDS') && data.type === 'table') {
                 const columns = header.get('TFIELDS') ?? 0;
                 const columnFormats = deriveColumnFormats(header, columns);
                 dataBlock = new TableWriter().toBinary(data, columnFormats);
             }
 
-            chunks.push(dataBlock);
-            position += dataBlock.length;
+            if (dataBlock) {
+                chunks.push(dataBlock);
+                position += dataBlock.length;
 
-            // Align end of data to next 2880 block
-            const dataPadding = align(position, headerWriter.blockSize) - position;
-            if (dataPadding > 0) {
-                chunks.push(new Uint8Array(dataPadding));
-                position += dataPadding;
+                // Align end of data to next 2880 block
+                const dataPadding = align(position, headerWriter.blockSize) - position;
+                if (dataPadding > 0) {
+                    const padBlock = makePadding(dataPadding);
+                    chunks.push(padBlock);
+                    position += dataPadding;
+                }
             }
         }
-
         return concatenateBlocks(chunks);
-    }
-
-    public toBlob(): Blob {
-        return new Blob([this.write()], { type: 'application/octet-stream' });
     }
 
     public get length(): number {
         return this.hdus.length;
     }
 
-    public getHDU(index: number): { header: FitsHeader; data: FitsData } {
-        return this.hdus[index];
-    }
-
-    public *entries(): IterableIterator<{ index: number; header: FitsHeader; data: FitsData }> {
+    public *entries(): IterableIterator<{ index: number; header: FitsHeader; data: FitsData | undefined }> {
         for (let i = 0; i < this.hdus.length; i++) {
             const { header, data } = this.hdus[i];
             yield { index: i, header, data };

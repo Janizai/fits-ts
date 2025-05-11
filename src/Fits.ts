@@ -12,6 +12,8 @@ export class Fits {
     private loadPromise?: Promise<void>;
     private loaded = false;
 
+    private lastIndexWithData: number | null = null;
+
     constructor(source?: FitsFileSource) {
         if (source) {
             this.reader = new FitsReader(source);
@@ -22,13 +24,11 @@ export class Fits {
         if (this.loaded) return;
         if (!this.reader) return;
     
-        if (!this.loadPromise) {
-            this.loadPromise = (async () => {
-                await this.reader!.parseHeaders();
-                this.hdus = this.reader!.hduMetadata;
-                this.loaded = true;
-            })();
-        }
+        this.loadPromise ??= (async () => {
+            await this.reader!.ensureHeadersParsed();
+            this.hdus = this.reader!.hduMetadata;
+            this.loaded = true;
+        })();
     
         return this.loadPromise;
     }
@@ -49,30 +49,32 @@ export class Fits {
     }
 
     public async getData(index: number): Promise<FitsData> {
+        if (this.lastIndexWithData !== null && this.lastIndexWithData != index) {
+            this.hdus[index].data = undefined;
+        }
+
         const hdu = this.getHDU(index);
 
-        if (hdu.data) {
-            return hdu.data;
+        if (!hdu.data) {
+            if (this.reader) {
+                hdu.data = await this.reader.getData(index);
+            } else {
+                throw new Error(`No data available for HDU index: ${index}`);
+            }
         }
-
-        if (this.reader) {
-            const data = await this.reader.getData(index);
-
-            hdu.data = data;
-            return data;
-        }
-
-        throw new Error(`No data available for HDU index: ${index}`);
+        this.lastIndexWithData = index;
+        return hdu.data;
     }
 
-    public addHDU(header: FitsHeader | undefined, data: FitsData): void {
+    public addHDU(header: FitsHeader | undefined, data: FitsData | undefined): void {
         // Create a minimal header if not provided
         const hdr = header ?? new FitsHeader();
-    
-        // Add or correct required keywords depending on the type
-        hdr.set('SIMPLE', true); // Assume primary HDU for simplicity
-    
-        if (data.type === 'image') {
+
+        if (this.hdus.length === 0) {
+            hdr.set('SIMPLE', true);
+        }
+
+        if (data?.type === 'image') {
             const [rows, columns] = data.shape.length === 2 ? data.shape : [1, data.shape[0] ?? 1];
             hdr.set('BITPIX', 16); // Assume 16-bit image if user didn't set it
             hdr.set('NAXIS', 2);
@@ -80,7 +82,7 @@ export class Fits {
             hdr.set('NAXIS2', rows);
         }
     
-        if (data.type === 'table') {
+        if (data?.type === 'table') {
             const [rows, columns] = data.shape;
             hdr.set('XTENSION', 'BINTABLE'); // Required for tables (if not primary)
             hdr.set('BITPIX', 8);
@@ -103,13 +105,13 @@ export class Fits {
                     hdr.set(tformKey, '1J');
                 }
             }
-        }
+        } 
     
         this.hdus.push({
             header: hdr,
             data,
-            shape: data.shape,
-            type: data.type,
+            shape: data?.shape,
+            type: data?.type ?? 'header',
         });
     }    
 
@@ -127,18 +129,18 @@ export class Fits {
         this.hdus.splice(index, 1);
     }
 
-    public async *entries(): AsyncIterableIterator<{ index: number; header: FitsHeader; data: FitsData }> {
+    public async *entries(): AsyncIterableIterator<{ index: number; header: FitsHeader; data: FitsData | undefined}> {
         for (let i = 0; i < this.hdus.length; i++) {
             const hdu = this.hdus[i];
 
             const header = hdu.header;
-            const data = hdu.data ?? await this.getData(i);
+            const data = hdu.data ?? (this.reader ? await this.getData(i) : undefined);
 
             yield { index: i, header, data };
         }
     }
 
-    public async entriesArray(): Promise<{ index: number; header: FitsHeader; data: FitsData }[]> {
+    public async entriesArray(): Promise<{ index: number; header: FitsHeader; data: FitsData | undefined }[]> {
         const result = [];
         for await (const entry of this.entries()) {
             result.push(entry);
@@ -148,15 +150,10 @@ export class Fits {
 
     public async toBytes(): Promise<Uint8Array> {
         const writer = new FitsWriter();
-        for (let i = 0; i < this.hdus.length; i++) {
-            const hdu = this.hdus[i];
-
-            const header = hdu.header;
-            const data = hdu.data || await this.getData(i);
-
+        for await (const { header, data } of this.entries()) {
             writer.addHDU(header, data);
         }
-        return writer.write()
+        return writer.write();
     }
 
     public async toBuffer(): Promise<Buffer> {

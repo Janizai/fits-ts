@@ -14,8 +14,8 @@ export class FitsFileReader {
             source instanceof Buffer
                 ? new Uint8Array(source.buffer, source.byteOffset, source.byteLength)
                 : source instanceof ArrayBuffer
-                ? new Uint8Array(source)
-                : source;
+                    ? new Uint8Array(source)
+                    : source;
 
         const isGzipped = uint8[0] === 0x1f && uint8[1] === 0x8b;
         return isGzipped ? pako.ungzip(uint8) : uint8;

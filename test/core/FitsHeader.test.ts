@@ -38,10 +38,10 @@ describe('FitsHeader', () => {
         expect(header.getComment('NAXIS')).to.equal('Updated number of axes');
     });
 
-    it('should throw an error for non-existent keys', () => {
+    it('should not throw an error for non-existent keys', () => {
         const header = new FitsHeader();
-        expect(() => header.get('NON_EXISTENT')).to.throw('Key "NON_EXISTENT" not found in header.');
-        expect(() => header.getComment('NON_EXISTENT')).to.throw('Key "NON_EXISTENT" not found in header.');
+        expect(() => header.get('NON_EXISTENT')).to.not.throw();
+        expect(() => header.getComment('NON_EXISTENT')).to.not.throw();
     });
 
     it('should return all keys in the header', () => {
@@ -57,7 +57,7 @@ describe('FitsHeader', () => {
         header.set('SIMPLE', true);
 
         expect(header.get('SIMPLE')).to.equal(true);
-        expect(header.getComment('SIMPLE')).to.equal(undefined);
+        expect(header.getComment('SIMPLE')).to.equal(null);
     });
 
     it('should handle initialization with mixed string and object entries', () => {

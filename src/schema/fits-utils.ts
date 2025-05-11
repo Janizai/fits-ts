@@ -68,16 +68,27 @@ export function parseHeaderLine(line: string): { key: string; value?: HeaderEntr
 }
 
 export function formatHeaderLine(key: string, value: HeaderEntryValue, comment?: string): string {
-    const formattedValue = formatHeaderValue(value);
+    // Begin with 8-char key, '=' and a space
     let line = key.padEnd(8, ' ') + '= ';
 
-    // Value field must start at column 11 and use up to 30 characters
-    const valueField = formattedValue.padStart(20, ' ').slice(-20).padEnd(30, ' ');
-    line += valueField;
+    let formattedValue = formatHeaderValue(value);
 
+    // For numbers, FITS expects right-alignment within 20 chars
+    // For strings and booleans, left-align (though usually fits)
+    const isNumeric = typeof value === 'number';
+    const paddedValue = isNumeric
+        ? formattedValue.padStart(20, ' ')
+        : formattedValue.padEnd(20, ' ');
+
+    // Pad to 30 columns of value field total
+    line += paddedValue + ' ';
+
+    // If there's a comment, add ' / ' and the comment
     if (comment) {
-        line += ' / ' + comment;
+        const commentStr = '/ ' + comment;
+        line += commentStr;
     }
 
+    // Pad to 80 chars total
     return line.padEnd(80, ' ');
 }

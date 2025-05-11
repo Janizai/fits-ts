@@ -1,5 +1,5 @@
 import { FitsFileReader } from './FileReader';
-import { FitsHDU, FitsData } from '../interfaces';
+import { FitsHDU, TableData } from '../interfaces';
 import { getTypeSize, parseFieldData, writeFieldData } from '../utils/TypeUtils';
 
 interface ColumnFormat {
@@ -35,7 +35,7 @@ export function deriveColumnFormats(
 export class TableParser {
     constructor(private readonly fileReader: FitsFileReader) {}
 
-    public async readTable(hdu: FitsHDU): Promise<FitsData> {
+    public async readTable(hdu: FitsHDU): Promise<TableData> {
         const rows = hdu.header.get('NAXIS2') ?? 0;
         const columns = hdu.header.get('TFIELDS') ?? 0;
         const rowLength = hdu.header.get('NAXIS1') ?? 0;
@@ -85,11 +85,7 @@ export class TableParser {
 }
 
 export class TableWriter {
-    public toBinary(data: FitsData, columnFormats: ColumnFormat[]): Uint8Array {
-        if (data.type !== 'table') {
-            throw new Error('TableWriter can only serialize table data.');
-        }
-
+    public toBinary(data: TableData, columnFormats: ColumnFormat[]): Uint8Array {
         const [rows, columns] = data.shape;
         const rowLength = columnFormats.reduce((sum, col) => sum + col.size, 0);
         const totalSize = rows * rowLength;

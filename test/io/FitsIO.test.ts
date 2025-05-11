@@ -1,3 +1,4 @@
+// test/io/FitsIO.spec.ts
 import { describe, it } from 'mocha';
 import { expect } from 'chai';
 import 'chai-as-promised';
@@ -17,11 +18,12 @@ function createSimpleImageHDU(): { header: FitsHeader; data: FitsData } {
         BZERO: 0
     });
 
+    // shape matches [NAXIS1, NAXIS2] per your parser
     const data: FitsData = {
         type: 'image',
         shape: [3, 2],
         keys: [],
-        data: [1, 2, 3, 4, 5, 6]
+        data: new Uint8Array([1, 2, 3, 4, 5, 6])   // ← TypedArray now
     };
 
     return { header, data };
@@ -46,9 +48,9 @@ describe('FitsWriter', () => {
         writer.addHDU(header, data);
         expect(writer.length).to.equal(1);
 
-        const hdu = writer.getHDU(0);
+        const hdu = Array.from(writer.entries())[0];
         expect(hdu.header.get('NAXIS')).to.equal(2);
-        expect(hdu.data.shape).to.deep.equal([3, 2]);
+        expect(hdu.data!.shape).to.deep.equal([3, 2]);
     });
 
     it('should iterate through HDUs', () => {
@@ -77,7 +79,8 @@ describe('FitsReader', () => {
         expect(hdu.get('BITPIX')).to.equal(8);
 
         const fitsdata = await reader.getData(0);
-        expect(fitsdata.data).to.deep.equal([1, 2, 3, 4, 5, 6]);
+        // data.data is now a Uint8Array → convert before comparing
+        expect(Array.from(fitsdata.data as Uint8Array)).to.deep.equal([1, 2, 3, 4, 5, 6]);
     });
 
     it('should yield HDUs from iterator', async () => {

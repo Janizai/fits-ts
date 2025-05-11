@@ -1,8 +1,9 @@
+// test/io/ImageIO.spec.ts
 import { expect } from 'chai';
 import { ImageParser, ImageWriter } from '../../src/io/ImageIO';
 import { FitsFileReader } from '../../src/io/FileReader';
 import { FitsHeader } from '../../src/core/FitsHeader';
-import { FitsHDU } from '../../src/interfaces';
+import { FitsHDU, ImageData } from '../../src/interfaces';
 
 function createTestImageBuffer(pixelValues: number[], bitpix: number): Uint8Array {
     const rows = 2;
@@ -29,7 +30,6 @@ function createTestImageBuffer(pixelValues: number[], bitpix: number): Uint8Arra
     full.set(paddedData, headerBytes.length);
     return full;
 }
-
 
 describe('ImageIO', () => {
     const pixelValues = [1, 2, 3, 4, 5, 6];
@@ -60,7 +60,8 @@ describe('ImageIO', () => {
 
             const result = await parser.readImage(hdu);
             expect(result.shape).to.deep.equal([3, 2]);
-            expect(result.data).to.deep.equal(pixelValues);
+            // result.data is now a Uint8Array
+            expect(Array.from(result.data as Uint8Array)).to.deep.equal(pixelValues);
             expect(result.type).to.equal('image');
         });
 
@@ -82,7 +83,6 @@ describe('ImageIO', () => {
 
             const dummy = new Uint8Array(1);
             const reader = new FitsFileReader(dummy);
-
             const parser = new ImageParser(reader);
 
             await expect(parser.readImage(hdu)).to.be.rejectedWith('Unsupported BITPIX');
@@ -90,44 +90,47 @@ describe('ImageIO', () => {
     });
 
     describe('ImageWriter', () => {
-        it('should correctly write and reparse 8-bit image data', async () => {
+        it('should correctly write and reparse 8-bit image data', () => {
             const writer = new ImageWriter();
 
-            const data = {
+            const data: ImageData = {
                 shape: [3, 2],
-                data: pixelValues,
+                data: new Uint8Array(pixelValues), // now a TypedArray
                 keys: [],
-                type: 'image' as const,
+                type: 'image',
             };
 
             const buffer = writer.toBinary(data, bitpix);
             expect(buffer).to.be.instanceOf(Uint8Array);
+            // Spread into plain array for deep-equal
             expect([...buffer]).to.deep.equal(pixelValues);
         });
 
         it('should throw if data.shape does not match data length', () => {
             const writer = new ImageWriter();
 
-            const badData = {
+            const badData: ImageData = {
                 shape: [2, 2],
-                data: pixelValues,
+                data: new Uint8Array(pixelValues),
                 keys: [],
-                type: 'image' as const,
+                type: 'image',
             };
 
-            expect(() => writer.toBinary(badData)).to.throw('Data length does not match shape');
+            expect(() => writer.toBinary(badData, bitpix))
+                .to.throw('Data length does not match shape');
         });
 
         it('should throw on unsupported BITPIX for writing', () => {
             const writer = new ImageWriter();
-            const data = {
+            const data: ImageData = {
                 shape: [3, 2],
-                data: pixelValues,
+                data: new Uint8Array(pixelValues),
                 keys: [],
-                type: 'image' as const,
+                type: 'image',
             };
 
-            expect(() => writer.toBinary(data, 99)).to.throw('Unsupported BITPIX for writing');
+            expect(() => writer.toBinary(data, 99))
+                .to.throw('Unsupported BITPIX for writing');
         });
 
         it('should throw on non-image data', () => {
@@ -135,12 +138,13 @@ describe('ImageIO', () => {
 
             const badData = {
                 shape: [3, 2],
-                data: pixelValues,
+                data: new Uint8Array(pixelValues),
                 keys: [],
-                type: 'table' as const, // incorrect type
+                type: 'table' as const,
             };
 
-            expect(() => writer.toBinary(badData)).to.throw(`Data type is not 'image'`);
+            expect(() => writer.toBinary(badData as any, bitpix))
+                .to.throw(`Data type is not 'image'`);
         });
     });
 });

@@ -6,14 +6,37 @@ export interface FitsHDU {
     headerOffset?: number;
     dataOffset?: number;
     header: FitsHeader;
-    shape: number[];
+    shape: number[] | undefined;
     data?: FitsData;
     type: HDUType;
 }
 
-export interface FitsData {
-    shape: number[];
-    keys: string[];
-    type: HDUType;
-    data: any[];
+export type FitsNumericArray =
+  | Uint8Array
+  | Int16Array
+  | Int32Array
+  | Float32Array
+  | Float64Array;
+
+export interface ImageData {
+    type: 'image';
+    shape: [number, number];
+    keys: [];
+    data: FitsNumericArray;
 }
+
+export interface TableData {
+    type: 'table';
+    shape: [number, number];
+    keys: string[];
+    data: any[][];
+}
+
+export interface HeaderData {
+    type: 'header';
+    shape: [];
+    keys: [];
+    data: null;
+}
+
+export type FitsData = ImageData | TableData | HeaderData; 

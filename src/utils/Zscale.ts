@@ -22,8 +22,9 @@ export class Zscale {
         this.max_iterations = max_iterations;
     }
 
-     public get_limits(values: number[]): [number, number] {
-        const finiteValues = values.filter(value => isFinite(value) && !isNaN(value));
+     public get_limits(values: Iterable<number>): [number, number] {
+        const allVals = Array.from(values);
+        const finiteValues = allVals.filter(v => isFinite(v) && !isNaN(v));
 
         const stride = Math.max(1, Math.floor(finiteValues.length / this.n_samples));
         const samples: number[] = [];

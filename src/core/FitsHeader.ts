@@ -48,39 +48,31 @@ export class FitsHeader {
         };
     }
   
-    public get<K extends keyof FitsHeaderTypes>(key: K): FitsHeaderTypes[K] | undefined;
-    public get(key: string): HeaderEntryValue | undefined;
-    public get(key: string): HeaderEntryValue | undefined {
-        if (!this.entries[key]) {
-            throw new Error(`Key "${key}" not found in header.`);
-        }
-        return this.entries[key].value;
+    public get<K extends keyof FitsHeaderTypes>(key: K): FitsHeaderTypes[K] | null;
+    public get(key: string): HeaderEntryValue | null;
+
+    public get(key: string): HeaderEntryValue | null {
+        const entry = this.entries[key];
+        return entry == null
+        ? null
+        : entry.value;
     }
 
-    public getNumber(key: string): number | undefined {
-        if (!this.entries[key]) {
-            throw new Error(`Key "${key}" not found in header.`);
-        }
-        const value = this.entries[key].value;
-        if (typeof value !== 'number') {
-            throw new Error(`Value for key "${key}" is not a number.`);
-        }
-        return value;
+    public getNumber(key: string): number | null {
+        const val = this.get(key);
+        return typeof val === 'number' ? val : null;
     }
 
-    public getString(key: string): string | undefined {
-        if (!this.entries[key]) {
-            throw new Error(`Key "${key}" not found in header.`);
-        }
-        const value = this.entries[key].value;
-        return formatHeaderValue(value);
+    public getString(key: string): string | null {
+        const val = this.get(key);
+        return val == null
+            ? null
+            : formatHeaderValue(val);
     }
   
-    public getComment(key: string): string | undefined {
-        if (!this.entries[key]) {
-            throw new Error(`Key "${key}" not found in header.`);
-        }
-        return this.entries[key].comment;
+    public getComment(key: string): string | null {
+        const entry = this.entries[key];
+        return entry?.comment ?? null;
     }
   
     public keys(): string[] {
